@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>NBA</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="css/bootstrap.css" rel="stylesheet">
+    <script src="js/jquery.js"></script>
+    <script src="js/bootstrap.js"></script>
+    <div id="divUI">
+        <label>Adding Image:</label><br />
+        <input type="file" onchange="inputFileAsImage_Changed(this);"></input><br />
+        <div id="divImageDisplay"></div><br />
+        <button onclick="buttonImageSaveToFile_Clicked();">Add Image</button><br />
+    </div>
+ <script type="text/javascript">
+ 
+// ui event handlers
+ 
+function bytesFromTextarea()
+{
+    var textareaBytesAsHexadecimal = 
+        document.getElementById("textareaBytesAsHexadecimal");
+    var bytesAsStringHexadecimal = textareaBytesAsHexadecimal.value;
+ 
+    var bytes = [];
+ 
+    var numberOfNibbles = bytesAsStringHexadecimal.length
+ 
+    for (var b = 0; b < numberOfNibbles; b += 2)
+    {
+        var byteAsStringHexadecimal = bytesAsStringHexadecimal.substr(b, 2);
+        var byte = parseInt(byteAsStringHexadecimal, 16);
+        bytes.push(byte);
+    }
+ 
+    return bytes;
+}
+ 
+function buttonBytesSaveToFile_Clicked()
+{
+    var inputFileName = document.getElementById("inputFileName");
+    var fileName = inputFileName.value + ".bin";
+ 
+    var bytes = bytesFromTextarea();
+ 
+    new FileHelper().saveBytesToFileWithName(bytes, fileName);
+}
+ 
+function buttonBytesToImage_Clicked()
+{
+    var bytes = bytesFromTextarea();
+ 
+    var numberOfBytes = bytes.length;
+     
+    var bytesPerPixel = 3;
+ 
+    var numberOfPixels = Math.ceil(numberOfBytes / bytesPerPixel);
+     
+    var imageWidthInPixels
+        = Math.ceil(Math.sqrt(numberOfPixels));
+    var imageHeightInPixels
+        = Math.ceil(numberOfPixels / imageWidthInPixels);
+    var imageSizeInPixels
+        = new Coords(imageWidthInPixels, imageHeightInPixels + 1);
+ 
+    var canvas = document.createElement("canvas");
+    canvas.width = imageSizeInPixels.x;
+    canvas.height = imageSizeInPixels.y;
+ 
+    var graphics = canvas.getContext("2d");
+ 
+    var numberOfBytes = bytes.length;
+ 
+    // Max file size is 2^24 B = 16 MiB.
+    var numberOfBytesMax = 2 << 23.
+ 
+    if (numberOfBytes > numberOfBytesMax)
+    {
+        alert("File must not be larger than " + numberOfBytesMax + " bytes.");
+        return;
+    }
+ 
+    // Store the file's length in bytes in the upper-left pixel.
+ 
+    var numberOfBytesAsRGB = 
+    [
+        (numberOfBytes >> 16) & 0xff,
+        (numberOfBytes >> 8) & 0xff,
+        (numberOfBytes) & 0xff
+    ];
+    var pixelColorAsString = 
+        "rgb(" + numberOfBytesAsRGB.join(",") + ")";
+ 
+    graphics.fillStyle = pixelColorAsString;
+    graphics.fillRect(0, 0, 1, 1);
+ 
+ 
+    // Store 3 bytes per pixel as RGB components.
+ 
+    var byteIndex = 0;
+ 
+    for (var y = 1; y < imageSizeInPixels.y; y++)
+    {
+        for (var x = 0; x < imageSizeInPixels.x; x++)
+        {
+            var pixelColorRGB = [0, 0, 0];
+ 
+            for (var b = 0; b < bytesPerPixel; b++)
+            {
+                if (byteIndex < numberOfBytes)
+                {
+                    var byte = bytes[byteIndex];
+                    pixelColorRGB[b] = byte;
+                }
+ 
+                byteIndex++;
+            }
+ 
+            var pixelColorAsString = 
+                "rgb(" + pixelColorRGB.join(",") + ")";
+ 
+            graphics.fillStyle = pixelColorAsString;
+            graphics.fillRect(x, y, 1, 1);
+        }
+    }
+ 
+    var imageAsDataURL = canvas.toDataURL("image/png");
+    var imgElement = document.createElement("img");
+    imgElement.onload = function(event2)
+    {
+        var divImageDisplay = document.getElementById
+        (
+            "divImageDisplay"
+        );
+        divImageDisplay.innerHTML = "";
+        divImageDisplay.appendChild(imgElement);
+    }
+    imgElement.src = imageAsDataURL;
+}
+ 
+function buttonImageSaveToFile_Clicked()
+{
+    var divImageDisplay = document.getElementById
+    (
+        "divImageDisplay"
+    );
+    var imgElement = divImageDisplay.getElementsByTagName("img")[0];
+ 
+    if (imgElement == null)
+    {
+        alert("No image specified!");
+    }
+ 
+    var canvas = document.createElement("canvas");
+    canvas.width = imgElement.width;
+    canvas.height = imgElement.height;
+    var graphics = canvas.getContext("2d");
+ 
+    graphics.drawImage(imgElement, 0, 0);
+ 
+    var inputFileName = document.getElementById("inputFileName");
+    var fileName = inputFileName.value;
+ 
+    new FileHelper().saveCanvasToFileWithName
+    (
+        canvas, 
+        fileName + ".png"
+    );
+}
+ 
+function buttonImageToBytes_Clicked()
+{
+    var divImageDisplay = document.getElementById("divImageDisplay");
+    var imgElement = divImageDisplay.getElementsByTagName("img")[0];
+ 
+    if (imgElement == null)
+    {
+        alert("No image specified!");
+        return;
+    }
+ 
+    var imageSizeInPixels = new Coords
+    (
+        imgElement.width,
+        imgElement.height
+    );
+ 
+    var canvas = document.createElement("canvas");
+    canvas.width = imageSizeInPixels.x;
+    canvas.height = imageSizeInPixels.y;
+ 
+    var graphics = canvas.getContext("2d");
+ 
+    graphics.drawImage(imgElement, 0, 0);
+ 
+    var bytesPerPixel = 3;
+ 
+    var bytes = [];
+ 
+    var pixelColorsRGBA = graphics.getImageData
+    (
+        0, 0, imageSizeInPixels.x, imageSizeInPixels.y
+    ).data;
+ 
+    // Decode the file's length in bytes from the upper-left pixel.
+ 
+    var numberOfBytesAsRGB = pixelColorsRGBA.slice(0, 3);
+ 
+    var numberOfBytes = 
+        (numberOfBytesAsRGB[0] << 16)
+        + (numberOfBytesAsRGB[1] << 8)
+        + (numberOfBytesAsRGB[2]);
+ 
+    var byteIndex = 0;
+ 
+    for (var y = 1; y < imageSizeInPixels.y; y++)
+    {
+        for (var x = 0; x < imageSizeInPixels.x; x++)
+        {
+            var pixelIndex = 
+                y * imageSizeInPixels.x 
+                + x;
+ 
+            var pixelColorRGBA = pixelColorsRGBA.slice
+            (
+                pixelIndex * 4, 
+                pixelIndex * 4 + 4
+            );
+ 
+            for (var b = 0; b < bytesPerPixel; b++)
+            {
+                var byte = pixelColorRGBA[b];
+ 
+                bytes[byteIndex] = byte;
+ 
+                byteIndex++;
+            }
+        }
+    }
+ 
+    bytes.length = numberOfBytes;
+ 
+    var bytesAsHexadecimal = "";
+ 
+    for (var b = 0; b < numberOfBytes; b++)
+    {
+        var byte = bytes[b];
+        var byteAsHexadecimal = byte.toString(16);
+        while (byteAsHexadecimal.length < 2)
+        {
+            byteAsHexadecimal = "0" + byteAsHexadecimal;
+        }
+        bytesAsHexadecimal += byteAsHexadecimal;
+    }
+ 
+    var textareaBytesAsHexadecimal = document.getElementById
+    (
+        "textareaBytesAsHexadecimal"
+    );
+ 
+    textareaBytesAsHexadecimal.value = bytesAsHexadecimal;
+ 
+}
+ 
+function inputFileAsBytes_Changed(inputFileAsBytes)
+{
+    var file = inputFileAsBytes.files[0];
+ 
+    var fileReader = new FileReader();
+    fileReader.onload = function(event)
+    {
+        var fileAsBinaryString = event.target.result;
+ 
+        var numberOfBytes = fileAsBinaryString.length;
+ 
+        var bytesAsHexadecimal = "";
+ 
+        for (var b = 0; b < numberOfBytes; b++)
+        {
+            var byte = fileAsBinaryString.charCodeAt(b);
+            var byteAsHexadecimal = byte.toString(16);
+            while (byteAsHexadecimal.length < 2)
+            {
+                byteAsHexadecimal = "0" + byteAsHexadecimal;
+            }
+            bytesAsHexadecimal += byteAsHexadecimal;
+        }
+ 
+        var textareaBytesAsHexadecimal = document.getElementById
+        (
+            "textareaBytesAsHexadecimal"
+        );
+ 
+        textareaBytesAsHexadecimal.value = 
+            bytesAsHexadecimal;
+         
+    }
+    fileReader.readAsBinaryString(file);
+}
+ 
+function inputFileAsImage_Changed(inputFileAsImage)
+{
+    var file = inputFileAsImage.files[0];
+ 
+    var fileReader = new FileReader();
+    fileReader.onload = function(event)
+    {
+        var imageAsDataURL = event.target.result;
+        var imgElement = document.createElement("img");
+        imgElement.onload = function(event2)
+        {
+            var divImageDisplay = document.getElementById
+            (
+                "divImageDisplay"
+            );
+            divImageDisplay.innerHTML = "";
+            divImageDisplay.appendChild(imgElement);
+        }
+        imgElement.src = imageAsDataURL;
+    }
+    fileReader.readAsDataURL(file);
+}
+ 
+// classes
+ 
+function Coords(x, y)
+{
+    this.x = x;
+    this.y = y;
+}
+ 
+function FileHelper()
+{
+    // do nothing
+}
+{
+    FileHelper.prototype.saveBytesToFileWithName = function(bytesToWrite, fileNameToSaveAs)
+    {
+        var bytesToWriteAsArrayBuffer = new ArrayBuffer(bytesToWrite.length);
+        var bytesToWriteAsUIntArray = new Uint8Array(bytesToWriteAsArrayBuffer);
+        for (var i = 0; i < bytesToWrite.length; i++) 
+        {
+            bytesToWriteAsUIntArray[i] = bytesToWrite[i];
+        }
+   
+        var bytesToWriteAsBlob = new Blob
+        (
+            [ bytesToWriteAsArrayBuffer ], 
+            { type:"application/type" }
+        );
+   
+        var link = document.createElement("a");
+        link.href = window.URL.createObjectURL(bytesToWriteAsBlob);
+        link.download = fileNameToSaveAs;
+        link.click();
+    }
+ 
+    FileHelper.prototype.saveCanvasToFileWithName = function(canvas, fileNameToSaveAs)
+    {
+        var imageFromCanvasURL = canvas.toDataURL("image/png");
+  
+        var imageAsByteString = atob(imageFromCanvasURL.split(',')[1]);
+        var imageAsArrayBuffer = new ArrayBuffer(imageAsByteString.length);
+        var imageAsArrayUnsigned = new Uint8Array(imageAsArrayBuffer);
+        for (var i = 0; i < imageAsByteString.length; i++) 
+        {
+            imageAsArrayUnsigned[i] = imageAsByteString.charCodeAt(i);
+        }
+  
+        var imageAsBlob = new Blob([imageAsArrayBuffer], {type:"image/png"});
+  
+        if (fileNameToSaveAs.toLowerCase().endsWith(".png") == false)
+        {
+            fileNameToSaveAs += ".png";
+        }
+  
+        var link = document.createElement("a");
+        link.href = window.URL.createObjectURL(imageAsBlob);
+        link.download = fileNameToSaveAs;
+        link.click();
+    }
+ 
+}
+ 
+</script>
+ 
+        <a href="menu.html"><font color="black"><center><input type="button" name="button" value="Menu"></center></font></a>
+</head>
+<body background="img/grey.png">
+	<div id="carousel-example-generic" class="carousel slide" data-ride="carousel">
+          <!-- Indicators -->
+          <ol class="carousel-indicators">
+            <li data-target="#carousel-example-generic" data-slide-to="0" class="active"></li>
+            <li data-target="#carousel-example-generic" data-slide-to="1"></li>
+            <li data-target="#carousel-example-generic" data-slide-to="2"></li>
+            <li data-target="#carousel-example-generic" data-slide-to="3"></li>
+            <li data-target="#carousel-example-generic" data-slide-to="4"></li>
+          </ol>
+          <!-- Wrapper for slides -->
+          <div class="carousel-inner" role="listbox">
+            <div class="item active">
+              <center><img src="img/downloads/lakers/lonzo.png" alt="..."></center>
+              <div class="carousel-caption">
+               <b><font color="black"></font></b>
+              </div>
+            </div>
+
+            <div class="item">
+              <center><img src="img/downloads/lakers/jc.png" alt="..."></center>
+              <div class="carousel-caption">
+                ...
+              </div>
+            </div>
+
+            <div class="item">
+              <center><img src="img/downloads/lakers/ingram.png" alt="..."></center>
+              <div class="carousel-caption">
+                ...
+              </div>
+            </div>
+
+            <div class="item">
+              <center><img src="img/downloads/lakers/randle.png" alt="..."></center>
+              <div class="carousel-caption">
+                ...
+              </div>
+            </div>
+            
+            <div class="item">
+              <center><img src="img/downloads/lakers/lopez.png" alt="..."></center>
+              <div class="carousel-caption">
+                ...
+              </div>
+            </div>
+
+            <div class="item">
+              <center><img src="img/downloads/76ers/flutz.png" alt="..."></center>
+              <div class="carousel-caption">
+                ...
+              </div>
+            </div>
+
+            <div class="item">
+              <center><img src="img/downloads/76ers/jj.png" alt="..."></center>
+              <div class="carousel-caption">
+                ...
+              </div>
+            </div>
+
+            <div class="item">
+              <center><img src="img/downloads/76ers/ben.png" alt="..."></center>
+              <div class="carousel-caption">
+                ...
+              </div>
+            </div>
+
+            <div class="item">
+              <center><img src="img/downloads/76ers/dario.png" alt="..."></center>
+              <div class="carousel-caption">
+                ...
+              </div>
+            </div>
+
+            <div class="item">
+              <center><img src="img/downloads/76ers/joel.png" alt="..."></center>
+              <div class="carousel-caption">
+                ...
+              </div>
+            </div>
+
+
+
+
+          <!-- Controls -->
+          <a class="left carousel-control" href="#carousel-example-generic" role="button" data-slide="prev">
+            <span class="glyphicon glyphicon-chevron-left" aria-hidden="true"></span>
+            <span class="sr-only">Previous</span>
+          </a>
+          <a class="right carousel-control" href="#carousel-example-generic" role="button" data-slide="next">
+            <span class="glyphicon glyphicon-chevron-right" aria-hidden="true"></span>
+            <span class="sr-only">Next</span>
+          </a>
+
+
+        </div>
+
+      </div>
+    </div>
+
+</body>
+</html>
